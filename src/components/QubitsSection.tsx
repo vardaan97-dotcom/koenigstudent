@@ -21,7 +21,7 @@ import type { QubitsModule, QubitsDashboard } from '@/types';
 interface QubitsSectionProps {
   modules: QubitsModule[];
   dashboard: QubitsDashboard;
-  onStartTest: (moduleIds: string[], questionCount: number) => void;
+  onStartTest: (moduleIds: string[], questionCounts: Record<string, number>) => void;
   onReset: () => void;
 }
 
@@ -69,7 +69,7 @@ export default function QubitsSection({
 
   const handleStartTest = () => {
     const selectedIds = selectedModules.map((m) => m.id);
-    onStartTest(selectedIds, totalQuestionsSelected);
+    onStartTest(selectedIds, questionCounts);
   };
 
   return (
@@ -239,7 +239,7 @@ export default function QubitsSection({
 
             {/* Start Button */}
             <button
-              onClick={() => onStartTest([module.id], questionCounts[module.id])}
+              onClick={() => onStartTest([module.id], { [module.id]: questionCounts[module.id] })}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-cyan-600 text-white rounded-lg font-medium hover:bg-cyan-700 transition-colors"
             >
               <Play className="w-4 h-4" />

@@ -7,6 +7,7 @@ import TabNavigation from '@/components/TabNavigation';
 import ModuleList from '@/components/ModuleList';
 import VideoPlayer from '@/components/VideoPlayer';
 import QuizModal from '@/components/QuizModal';
+import QubitsPracticeModal from '@/components/QubitsPracticeModal';
 import ProgressSidebar from '@/components/ProgressSidebar';
 import QubitsSection from '@/components/QubitsSection';
 import ResourcesSection from '@/components/ResourcesSection';
@@ -17,18 +18,21 @@ import {
   course,
   modules as initialModules,
   learnerProgress,
-  qubitsModules,
-  qubitsDashboard,
+  qubitsModules as initialQubitsModules,
+  qubitsDashboard as initialQubitsDashboard,
   trainer,
   resources,
   notifications,
 } from '@/data/mockData';
-import type { TabId, Lesson, Module, Quiz } from '@/types';
+import { getQuestionsFromModules } from '@/data/qubitsQuestions';
+import type { TabId, Lesson, Module, Quiz, QuizQuestion, QubitsModule, QubitsDashboard } from '@/types';
 
 export default function LearnerDashboard() {
   const [activeTab, setActiveTab] = useState<TabId>('course');
   const [modules, setModules] = useState(initialModules);
   const [progress, setProgress] = useState(learnerProgress);
+  const [qubitsModules, setQubitsModules] = useState<QubitsModule[]>(initialQubitsModules);
+  const [qubitsDashboard, setQubitsDashboard] = useState<QubitsDashboard>(initialQubitsDashboard);
 
   // Video player state
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
@@ -39,6 +43,11 @@ export default function LearnerDashboard() {
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
   const [quizModuleTitle, setQuizModuleTitle] = useState('');
   const [isQuizOpen, setIsQuizOpen] = useState(false);
+
+  // Qubits Practice Test state
+  const [isPracticeOpen, setIsPracticeOpen] = useState(false);
+  const [practiceQuestions, setPracticeQuestions] = useState<QuizQuestion[]>([]);
+  const [practiceModuleTitle, setPracticeModuleTitle] = useState('');
 
   // Find lesson and module by ID
   const findLessonAndModule = useCallback(
@@ -213,17 +222,84 @@ export default function LearnerDashboard() {
 
   // Handle Qubits start test
   const handleQubitsStartTest = useCallback(
-    (moduleIds: string[], questionCount: number) => {
-      console.log('Starting Qubits test:', moduleIds, questionCount);
-      // In a real app, this would open a practice test modal
+    (moduleIds: string[], questionCounts: Record<string, number>) => {
+      // Get questions from selected modules
+      const questions = getQuestionsFromModules(moduleIds, questionCounts);
+
+      if (questions.length === 0) {
+        console.warn('No questions found for selected modules');
+        return;
+      }
+
+      // Create module title based on selection
+      const selectedTitles = moduleIds
+        .map((id) => {
+          const mod = qubitsModules.find((m) => m.id === id);
+          return mod?.title;
+        })
+        .filter(Boolean);
+
+      const title = selectedTitles.length === 1
+        ? selectedTitles[0]!
+        : `${selectedTitles.length} Modules (${questions.length} Questions)`;
+
+      setPracticeQuestions(questions);
+      setPracticeModuleTitle(title);
+      setIsPracticeOpen(true);
     },
-    []
+    [qubitsModules]
+  );
+
+  // Handle Qubits practice complete
+  const handlePracticeComplete = useCallback(
+    (score: number, totalTime: number, results: { questionId: string; isCorrect: boolean }[]) => {
+      const totalQuestions = results.length;
+
+      // Update Qubits dashboard stats
+      setQubitsDashboard((prev) => ({
+        ...prev,
+        totalQuizzes: prev.totalQuizzes + 1,
+        totalQuestionsAttempted: prev.totalQuestionsAttempted + totalQuestions,
+        overallAccuracy: Math.round(
+          ((prev.overallAccuracy * prev.totalQuestionsAttempted + score * totalQuestions / 100) /
+            (prev.totalQuestionsAttempted + totalQuestions)) * 100
+        ) / 100 * 100,
+        timeSpent: `${Math.round(parseInt(prev.timeSpent) + totalTime / 60)}h`,
+        streak: prev.streak + (score >= 70 ? 1 : 0),
+        lastPracticeDate: new Date().toISOString(),
+      }));
+
+      // Update individual module stats
+      setQubitsModules((prev) =>
+        prev.map((mod) => {
+          const moduleQuestions = results.filter((r) =>
+            practiceQuestions.find((q) => q.id === r.questionId)?.id.startsWith(mod.id.replace('qubits-', 'qb'))
+          );
+
+          if (moduleQuestions.length === 0) return mod;
+
+          const moduleCorrect = moduleQuestions.filter((r) => r.isCorrect).length;
+
+          return {
+            ...mod,
+            attemptedQuestions: mod.attemptedQuestions + moduleQuestions.length,
+            correctAnswers: mod.correctAnswers + moduleCorrect,
+            incorrectAnswers: mod.incorrectAnswers + (moduleQuestions.length - moduleCorrect),
+            unattempted: Math.max(0, mod.unattempted - moduleQuestions.length),
+            accuracy: Math.round(
+              ((mod.correctAnswers + moduleCorrect) / (mod.attemptedQuestions + moduleQuestions.length)) * 100
+            ),
+          };
+        })
+      );
+    },
+    [practiceQuestions]
   );
 
   // Handle Qubits reset
   const handleQubitsReset = useCallback(() => {
-    console.log('Resetting Qubits progress');
-    // In a real app, this would reset the practice test progress
+    setQubitsModules(initialQubitsModules);
+    setQubitsDashboard(initialQubitsDashboard);
   }, []);
 
   // Render tab content
@@ -315,6 +391,17 @@ export default function LearnerDashboard() {
           moduleTitle={quizModuleTitle}
           onSubmit={handleQuizSubmit}
           onReviewVideo={handleReviewVideo}
+        />
+      )}
+
+      {/* Qubits Practice Test Modal */}
+      {isPracticeOpen && practiceQuestions.length > 0 && (
+        <QubitsPracticeModal
+          isOpen={isPracticeOpen}
+          onClose={() => setIsPracticeOpen(false)}
+          questions={practiceQuestions}
+          moduleTitle={practiceModuleTitle}
+          onComplete={handlePracticeComplete}
         />
       )}
     </div>
