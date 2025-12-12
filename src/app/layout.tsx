@@ -6,6 +6,8 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { GamificationProvider } from "@/context/GamificationContext";
 import { StudyProvider } from "@/context/StudyContext";
 import { SocialProvider } from "@/context/SocialContext";
+import { CompanyProvider } from "@/context/CompanyContext";
+import { TourProvider } from "@/components/OnboardingTour";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -48,15 +50,19 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} antialiased`}>
         <AuthProvider>
-          <ThemeProvider>
-            <GamificationProvider>
-              <StudyProvider>
-                <SocialProvider>
-                  {children}
-                </SocialProvider>
-              </StudyProvider>
-            </GamificationProvider>
-          </ThemeProvider>
+          <CompanyProvider>
+            <ThemeProvider>
+              <GamificationProvider>
+                <StudyProvider>
+                  <SocialProvider>
+                    <TourProvider>
+                      {children}
+                    </TourProvider>
+                  </SocialProvider>
+                </StudyProvider>
+              </GamificationProvider>
+            </ThemeProvider>
+          </CompanyProvider>
         </AuthProvider>
         <script
           dangerouslySetInnerHTML={{
