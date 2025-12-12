@@ -15,7 +15,25 @@ import QubitsSection from '@/components/QubitsSection';
 import ResourcesSection from '@/components/ResourcesSection';
 import SupportSection from '@/components/SupportSection';
 import CertificateSection from '@/components/CertificateSection';
+
+// New Feature Components
+import AIStudyAssistant from '@/components/AIStudyAssistant';
+import BookmarksNotesPanel from '@/components/BookmarksNotesPanel';
+import FocusMode from '@/components/FocusMode';
+import GamificationWidget from '@/components/GamificationWidget';
+import SocialHub from '@/components/SocialHub';
+import AnalyticsDashboard from '@/components/AnalyticsDashboard';
+import StudyCalendar from '@/components/StudyCalendar';
+import SpacedRepetition from '@/components/SpacedRepetition';
+import MindMap from '@/components/MindMap';
+import ExamPrep from '@/components/ExamPrep';
+import CelebrationOverlay from '@/components/CelebrationOverlay';
+import KeyboardShortcuts, { useKeyboardShortcuts } from '@/components/KeyboardShortcuts';
+import WIPPopup, { useWIP } from '@/components/WIPPopup';
+
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
+import { useGamification } from '@/context/GamificationContext';
 import {
   learnerProfile as defaultLearnerProfile,
   course,
@@ -29,7 +47,23 @@ import {
 } from '@/data/mockData';
 import { getQuestionsFromModules } from '@/data/qubitsQuestions';
 import type { TabId, Lesson, Module, Quiz, QuizQuestion, QubitsModule, QubitsDashboard, Notification, LearnerProfile } from '@/types';
-import { Loader2 } from 'lucide-react';
+import {
+  Loader2,
+  Bot,
+  Bookmark,
+  Timer,
+  Users,
+  BarChart3,
+  Calendar,
+  Brain,
+  Network,
+  Award,
+  Keyboard,
+  Share2,
+  Flame,
+  Star,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // Loading fallback component
 function LoadingFallback() {
@@ -56,6 +90,9 @@ function LearnerDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { theme, isCustomBranded } = useTheme();
+  const { addXP, level, streak, xp, unlockAchievement } = useGamification();
+  const { wipState, showWIP, hideWIP } = useWIP();
 
   const [activeTab, setActiveTab] = useState<TabId>('course');
   const [modules, setModules] = useState(initialModules);
@@ -68,7 +105,7 @@ function LearnerDashboard() {
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [currentModule, setCurrentModule] = useState<Module | null>(null);
   const [isVideoOpen, setIsVideoOpen] = useState(false);
-  const [useYouTube, setUseYouTube] = useState(true); // Toggle between YouTube and simulated player
+  const [useYouTube, setUseYouTube] = useState(true);
 
   // Quiz state
   const [currentQuiz, setCurrentQuiz] = useState<Quiz | null>(null);
@@ -79,6 +116,39 @@ function LearnerDashboard() {
   const [isPracticeOpen, setIsPracticeOpen] = useState(false);
   const [practiceQuestions, setPracticeQuestions] = useState<QuizQuestion[]>([]);
   const [practiceModuleTitle, setPracticeModuleTitle] = useState('');
+
+  // Feature Panel States
+  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
+  const [isFocusModeOpen, setIsFocusModeOpen] = useState(false);
+  const [isSocialHubOpen, setIsSocialHubOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isSpacedRepOpen, setIsSpacedRepOpen] = useState(false);
+  const [isMindMapOpen, setIsMindMapOpen] = useState(false);
+  const [isExamPrepOpen, setIsExamPrepOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    '?': () => setIsShortcutsOpen(true),
+    'ctrl+a': () => setIsAIAssistantOpen(true),
+    'ctrl+b': () => setIsBookmarksOpen(true),
+    'ctrl+f': () => setIsFocusModeOpen(true),
+    'ctrl+s': () => setIsSocialHubOpen(true),
+    'escape': () => {
+      setIsAIAssistantOpen(false);
+      setIsBookmarksOpen(false);
+      setIsFocusModeOpen(false);
+      setIsSocialHubOpen(false);
+      setIsAnalyticsOpen(false);
+      setIsCalendarOpen(false);
+      setIsSpacedRepOpen(false);
+      setIsMindMapOpen(false);
+      setIsExamPrepOpen(false);
+      setIsShortcutsOpen(false);
+    },
+  });
 
   // Create learner profile from auth user
   const learnerProfile: LearnerProfile = user
@@ -102,7 +172,6 @@ function LearnerDashboard() {
         if (setAuthUser) {
           setAuthUser(userData);
         }
-        // Clean URL
         router.replace('/');
       } catch (error) {
         console.error('Failed to parse auth user:', error);
@@ -170,6 +239,10 @@ function LearnerDashboard() {
   // Handle lesson complete
   const handleLessonComplete = useCallback(
     (lessonId: string) => {
+      // Award XP for completing a lesson
+      addXP(20, 'Completed a lesson');
+      unlockAchievement('first_lesson');
+
       setModules((prev) =>
         prev.map((module) => {
           const lessonIndex = module.lessons.findIndex((l) => l.id === lessonId);
@@ -179,7 +252,6 @@ function LearnerDashboard() {
             if (lesson.id === lessonId) {
               return { ...lesson, status: 'completed' as const, progress: 100 };
             }
-            // Unlock next lesson
             if (idx === lessonIndex + 1 && lesson.status === 'locked') {
               return { ...lesson, status: 'not_started' as const };
             }
@@ -189,7 +261,6 @@ function LearnerDashboard() {
           const completedCount = updatedLessons.filter((l) => l.status === 'completed').length;
           const moduleProgress = Math.round((completedCount / updatedLessons.length) * 100);
 
-          // Check if module is complete
           const allLessonsComplete = updatedLessons.every((l) => l.status === 'completed');
 
           return {
@@ -213,7 +284,7 @@ function LearnerDashboard() {
         lastAccessedAt: new Date().toISOString(),
       }));
     },
-    []
+    [addXP, unlockAchievement]
   );
 
   // Handle video progress update
@@ -250,7 +321,6 @@ function LearnerDashboard() {
     if (nextLesson) {
       setCurrentLesson(nextLesson);
     } else {
-      // No more lessons in module, check for next module
       const moduleIndex = modules.findIndex((m) => m.id === currentModule.id);
       const nextModule = modules[moduleIndex + 1];
 
@@ -274,12 +344,17 @@ function LearnerDashboard() {
     (score: number, _answers: Record<string, string[]>) => {
       const passed = score >= (currentQuiz?.passingScore || 70);
 
+      if (passed) {
+        addXP(50, 'Passed a quiz');
+        unlockAchievement('first_quiz');
+        if (score === 100) {
+          unlockAchievement('perfect_quiz');
+        }
+      }
+
       setModules((prev) =>
         prev.map((module, idx) => {
           if (module.quiz.id === currentQuiz?.id) {
-            // Unlock next module if passed
-            const shouldUnlockNext = passed && module.progress === 100;
-
             return {
               ...module,
               quiz: {
@@ -291,7 +366,6 @@ function LearnerDashboard() {
             };
           }
 
-          // Unlock next module
           const prevModule = prev[idx - 1];
           if (prevModule?.quiz.id === currentQuiz?.id && passed && module.status === 'locked') {
             return {
@@ -320,12 +394,11 @@ function LearnerDashboard() {
             (prev.averageScore * prev.quizzesPassed + score) /
               (prev.quizzesPassed + 1)
           ),
-          // Check if certificate should be earned
           certificateEarned: prev.quizzesPassed + 1 >= prev.totalQuizzes,
         }));
       }
     },
-    [currentQuiz]
+    [currentQuiz, addXP, unlockAchievement]
   );
 
   // Handle review video from quiz
@@ -370,6 +443,9 @@ function LearnerDashboard() {
     (score: number, totalTime: number, results: { questionId: string; isCorrect: boolean }[]) => {
       const totalQuestions = results.length;
       const correctCount = results.filter((r) => r.isCorrect).length;
+
+      // Award XP based on performance
+      addXP(Math.round(score / 4), 'Completed practice test');
 
       setQubitsDashboard((prev) => {
         const newTotalAttempted = prev.totalQuestionsAttempted + totalQuestions;
@@ -420,7 +496,7 @@ function LearnerDashboard() {
         })
       );
     },
-    []
+    [addXP]
   );
 
   // Handle Qubits reset
@@ -428,6 +504,17 @@ function LearnerDashboard() {
     setQubitsModules(initialQubitsModules);
     setQubitsDashboard(initialQubitsDashboard);
   }, []);
+
+  // Handle share progress
+  const handleShareProgress = () => {
+    const text = `I'm making great progress on my AZ-104 Azure Administrator certification! 🎯 Currently at ${progress.overallProgress}% completion with a ${streak}-day learning streak! #Azure #CloudComputing #Learning`;
+    if (navigator.share) {
+      navigator.share({ title: 'My Learning Progress', text });
+    } else {
+      navigator.clipboard.writeText(text);
+      showWIP('Share Progress copied to clipboard!');
+    }
+  };
 
   // Loading state
   if (isLoading) {
@@ -441,7 +528,7 @@ function LearnerDashboard() {
     );
   }
 
-  // Not authenticated - show nothing while redirecting
+  // Not authenticated
   if (!isAuthenticated) {
     return null;
   }
@@ -485,11 +572,61 @@ function LearnerDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* PWC Branding Banner */}
+      {isCustomBranded && (
+        <div
+          className="w-full py-2 px-4 text-center text-white text-sm"
+          style={{ backgroundColor: theme.primaryColor }}
+        >
+          <div className="flex items-center justify-center gap-2">
+            <span className="font-semibold">{theme.name}</span>
+            <span className="opacity-75">×</span>
+            <span>Koenig Solutions</span>
+            <span className="ml-4 opacity-75">|</span>
+            <span className="opacity-75 ml-4">{theme.welcomeMessage}</span>
+          </div>
+        </div>
+      )}
+
       <Header
         learner={learnerProfile}
         notifications={notifications}
         onMarkNotificationRead={handleMarkNotificationRead}
       />
+
+      {/* Quick Stats Bar */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex items-center justify-between">
+            <GamificationWidget compact />
+
+            {/* Quick Action Buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAIAssistantOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-violet-100 text-violet-700 rounded-full text-sm hover:bg-violet-200 transition-colors"
+              >
+                <Bot className="w-4 h-4" />
+                <span className="hidden sm:inline">AI Assistant</span>
+              </button>
+              <button
+                onClick={() => setIsFocusModeOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-full text-sm hover:bg-indigo-200 transition-colors"
+              >
+                <Timer className="w-4 h-4" />
+                <span className="hidden sm:inline">Focus Mode</span>
+              </button>
+              <button
+                onClick={() => setIsExamPrepOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-full text-sm hover:bg-red-200 transition-colors"
+              >
+                <Award className="w-4 h-4" />
+                <span className="hidden sm:inline">Exam Prep</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <CourseHeader course={course} progress={progress} />
@@ -502,13 +639,83 @@ function LearnerDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3">{renderTabContent()}</div>
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-6">
             <ProgressSidebar progress={progress} qubitsDashboard={qubitsDashboard} />
+
+            {/* Gamification Widget */}
+            <GamificationWidget />
+
+            {/* Quick Tools */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <h3 className="font-semibold text-gray-900 mb-4">Quick Tools</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setIsBookmarksOpen(true)}
+                  className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  <Bookmark className="w-5 h-5 text-cyan-600" />
+                  <span className="text-xs text-gray-600">Bookmarks</span>
+                </button>
+                <button
+                  onClick={() => setIsCalendarOpen(true)}
+                  className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  <Calendar className="w-5 h-5 text-cyan-600" />
+                  <span className="text-xs text-gray-600">Calendar</span>
+                </button>
+                <button
+                  onClick={() => setIsSpacedRepOpen(true)}
+                  className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  <Brain className="w-5 h-5 text-purple-600" />
+                  <span className="text-xs text-gray-600">Flashcards</span>
+                </button>
+                <button
+                  onClick={() => setIsMindMapOpen(true)}
+                  className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  <Network className="w-5 h-5 text-green-600" />
+                  <span className="text-xs text-gray-600">Mind Map</span>
+                </button>
+                <button
+                  onClick={() => setIsSocialHubOpen(true)}
+                  className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  <Users className="w-5 h-5 text-blue-600" />
+                  <span className="text-xs text-gray-600">Community</span>
+                </button>
+                <button
+                  onClick={() => setIsAnalyticsOpen(true)}
+                  className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  <BarChart3 className="w-5 h-5 text-indigo-600" />
+                  <span className="text-xs text-gray-600">Analytics</span>
+                </button>
+              </div>
+
+              {/* Share Progress */}
+              <button
+                onClick={handleShareProgress}
+                className="w-full mt-4 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-xl hover:from-cyan-600 hover:to-blue-600 transition-colors"
+              >
+                <Share2 className="w-4 h-4" />
+                Share My Progress
+              </button>
+
+              {/* Keyboard Shortcuts */}
+              <button
+                onClick={() => setIsShortcutsOpen(true)}
+                className="w-full mt-2 flex items-center justify-center gap-2 py-2 text-gray-500 hover:text-gray-700 text-sm"
+              >
+                <Keyboard className="w-4 h-4" />
+                Keyboard Shortcuts (?)
+              </button>
+            </div>
           </div>
         </div>
       </main>
 
-      {/* Video Player Modal - YouTube or Simulated */}
+      {/* Video Player Modal */}
       {isVideoOpen && currentLesson && currentModule && (
         useYouTube ? (
           <YouTubePlayer
@@ -567,6 +774,67 @@ function LearnerDashboard() {
           onComplete={handlePracticeComplete}
         />
       )}
+
+      {/* Feature Modals */}
+      <AIStudyAssistant
+        isOpen={isAIAssistantOpen}
+        onClose={() => setIsAIAssistantOpen(false)}
+      />
+
+      <BookmarksNotesPanel
+        isOpen={isBookmarksOpen}
+        onClose={() => setIsBookmarksOpen(false)}
+      />
+
+      <FocusMode
+        isOpen={isFocusModeOpen}
+        onClose={() => setIsFocusModeOpen(false)}
+      />
+
+      <SocialHub
+        isOpen={isSocialHubOpen}
+        onClose={() => setIsSocialHubOpen(false)}
+      />
+
+      <AnalyticsDashboard
+        isOpen={isAnalyticsOpen}
+        onClose={() => setIsAnalyticsOpen(false)}
+      />
+
+      <StudyCalendar
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+      />
+
+      <SpacedRepetition
+        isOpen={isSpacedRepOpen}
+        onClose={() => setIsSpacedRepOpen(false)}
+      />
+
+      <MindMap
+        isOpen={isMindMapOpen}
+        onClose={() => setIsMindMapOpen(false)}
+      />
+
+      <ExamPrep
+        isOpen={isExamPrepOpen}
+        onClose={() => setIsExamPrepOpen(false)}
+      />
+
+      <KeyboardShortcuts
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      {/* Celebration Overlay */}
+      <CelebrationOverlay />
+
+      {/* WIP Popup */}
+      <WIPPopup
+        isOpen={wipState.isOpen}
+        onClose={hideWIP}
+        featureName={wipState.featureName}
+      />
     </div>
   );
 }
